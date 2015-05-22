@@ -13,7 +13,7 @@ from mininet.link import TCLink
 LINK_BW_1 = 100 # 100Mbps
 LINK_BW_2 = 10 # 10Mbps
 
-DELAY = '1000ms' # 1s
+DELAY = '500ms' # 0.5s, RTT=2s
 
 class RC3Topo(Topo):	
 
@@ -38,6 +38,14 @@ def rc3Test(bandwidth, flowLen):
 
     print "Dumping node connections"
     dumpNodeConnections(net.hosts)
+
+    print "Testing bandwidth between 'h1' and 'h2'"
+    h1, h2 = net.getNodeByName('h1', 'h2')
+    #net.iperf((h1, h2), l4Type='TCP')
+    h2.sendCmd('iperf -s')
+    result = h1.cmd('iperf -c', h2.IP(), '-n', flowLen)
+    print result
+    net.stop()
 
 if __name__ == '__main__':
     lg.setLogLevel('info')
