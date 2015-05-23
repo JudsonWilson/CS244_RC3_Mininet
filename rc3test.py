@@ -32,6 +32,11 @@ class RC3Topo(Topo):
         self.addLink(switch, h2, bw=bandwidth, delay=DELAY, use_htb=True)
 
 
+def addPrioQdisc(node, devStr):
+    node.cmdPrint('tc qdisc add dev', devStr,
+            'parent 10:1 handle 15:0 prio bands 8')
+    node.cmdPrint('tc qdisc show')
+
 def rc3Test(bandwidth, flowLen):
     topo = RC3Topo(bandwidth)
     net = Mininet(topo, link=TCLink)
@@ -43,12 +48,10 @@ def rc3Test(bandwidth, flowLen):
 
     h1, h2 = net.getNodeByName('h1', 'h2')
 
-    #add prio qdisc to hosts
-    print "Adding qdisc"
-    h1.cmdPrint('tc qdisc add dev h1-eth0 parent 10:1 handle 15:0 prio bands 8')
-    h1.cmdPrint('tc qdisc show')
-    h2.cmdPrint('tc qdisc add dev h2-eth0 parent 10:1 handle 15:0 prio bands 8')
-    h2.cmdPrint('tc qdisc show')
+    print "Adding qdiscs"
+    addPrioQdisc(h1, 'h1-eth0')
+    addPrioQdisc(h2, 'h2-eth0')
+    #TODO do we need this at the switch too?
 
     print "Testing bandwidth between 'h1' and 'h2'"
     h2.sendCmd('iperf -s')
