@@ -5,6 +5,9 @@ from mininet.net import Mininet
 from mininet.util import dumpNodeConnections
 from mininet.log import lg
 from mininet.link import TCLink
+from mininet.util import pmonitor
+from time import time
+from signal import SIGINT
 
 # Actual experiment was 10Gbps and 1Gbps with an RTT of 20ms.
 # We reduce the link speed and increase the latency to maintain
@@ -13,7 +16,8 @@ from mininet.link import TCLink
 LINK_BW_1 = 100 # 100Mbps
 LINK_BW_2 = 10 # 10Mbps
 
-DELAY = '500ms' # 0.5s, RTT=2s
+#DELAY = '500ms' # 0.5s, RTT=2s
+DELAY = '200ms' # TODO remove (test)
 
 class RC3Topo(Topo):	
 
@@ -34,7 +38,7 @@ class RC3Topo(Topo):
 
 def addPrioQdisc(node, devStr):
     node.cmdPrint('tc qdisc add dev', devStr,
-            'parent 10:1 handle 15:0 prio bands 8')
+            'parent 10:1 handle 15:0 prio bands 8 priomap 0 0 1 0 2 0 3 0 4 0 0 0 0 0 0 0')
     node.cmdPrint('tc qdisc show')
 
 def rc3Test(bandwidth, flowLen):
@@ -55,8 +59,32 @@ def rc3Test(bandwidth, flowLen):
 
     print "Testing bandwidth between 'h1' and 'h2'"
     h2.sendCmd('iperf -s')
-    result = h1.cmd('iperf -c', h2.IP(), '-n', flowLen)
-    print result
+    #result = h1.cmd('iperf -c', h2.IP(), '-n', flowLen)
+    #print result
+    '''
+    print 'launching high priority iperf'
+    h1.sendCmd('iperf -c', h2.IP(), '-n', flowLen, '-S 0x0 > highperf.txt')
+    print 'launching low priority iperf'
+    h1.sendCmd('iperf -c', h2.IP(), '-n', flowLen, '-S 0x4 > lowperf.txt')
+    print 'lol'
+    '''
+
+    popens = {}
+    print 'launching high priority iperf'
+    popens['hiperf'] = h1.popen('iperf -c %s -n %i -S 0x0 > hiperf.txt' % (h2.IP(), flowLen))
+    print 'launching low priority iperf'
+    popens['loperf'] = h1.popen('iperf -c %s -n %i -S 0x1 > loperf.txt' % (h2.IP(), flowLen))
+
+    endTime = time() + 40 #seconds
+    for perf, line in pmonitor(popens, timeoutms=100):
+    #    h1.cmdPrint('tc -s qdisc ls dev h1-eth0')
+        if perf:
+            print '<%s>: %s' % (perf, line)
+        if time() >= endTime:
+            print 'timeout'
+            for p in popens.values():
+                p.send_signal( SIGINT )
+
     net.stop()
 
 if __name__ == '__main__':
