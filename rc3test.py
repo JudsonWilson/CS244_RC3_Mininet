@@ -7,6 +7,7 @@ from mininet.log import lg
 from mininet.link import TCLink
 from mininet.util import pmonitor
 from time import time
+from time import sleep
 from signal import SIGINT
 
 import matplotlib.pyplot as plt
@@ -20,7 +21,7 @@ LINK_BW_1 = 100 # 100Mbps
 LINK_BW_2 = 10 # 10Mbps
 
 #DELAY = '500ms' # 0.5s, RTT=2s
-DELAY = '20ms' # TODO remove (test)
+DELAY = '2ms' # TODO remove (test)
 
 class RC3Topo(Topo):	
 
@@ -97,9 +98,62 @@ def rc3Test(bandwidth, flowLen):
 
     net.stop()
 
+def prioTest(bandwidth, interval, duration):
+    topo = RC3Topo(bandwidth)
+    net = Mininet(topo, link=TCLink)
+    net.start()
+
+    print "Dumping node connections"
+    dumpNodeConnections(net.hosts)
+
+    h1, h2 = net.getNodeByName('h1', 'h2')
+
+    print "Adding qdiscs"
+    addPrioQdisc(h1, 'h1-eth0')
+    addPrioQdisc(h2, 'h2-eth0')
+
+    print "Testing bandwidth with high and low priority flows..."
+    h2.popen('iperf3 -s -p 5001 -i 1 > servhi.log 2> servhi.log', shell=True) #high
+    h2.popen('iperf3 -s -p 5002 -i 1 > servlo.log 2> servlo.log', shell=True) #low
+
+
+    popens = {}
+    print 'launching low priority iperf'
+    popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %d -t %d -S 0x4 > outlo.csv' % 
+            (h2.IP(), interval, duration+20), shell=True)
+
+    sleep(5)
+
+    print 'launching high priority iperf'
+    popens['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %d -t %d -S 0x0  > outhi.csv' % 
+            (h2.IP(), interval, duration), shell=True)
+    
+    
+    
+    '''
+    times = 10
+    while times > 0:
+        h1.cmdPrint('tc -s class ls dev h1-eth0')
+        sleep(1)
+        times -= 1
+    '''
+    
+    
+
+    popens['hiperf'].wait()
+    print 'high priority finished'
+
+    popens['loperf'].wait()
+    print 'low priority finished'
+
+    net.stop()
+
+
+
 if __name__ == '__main__':
     lg.setLogLevel('info')
-    rc3Test(37, 20000)
+    #rc3Test(37, 20000)
+    prioTest(LINK_BW_1, 1, 40)
 
     plt.plot([1,2,3,4])
     plt.ylabel('some numbers')
