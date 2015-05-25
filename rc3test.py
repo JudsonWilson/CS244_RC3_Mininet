@@ -23,6 +23,24 @@ LINK_BW_2 = 10 # 10Mbps
 #DELAY = '500ms' # 0.5s, RTT=2s
 DELAY = '2ms' # TODO remove (test)
 
+class RC3PrioSwitchTestTopo(Topo):
+    def __init__(self, bandwidth):
+
+        #Initialize Topology
+        Topo.__init__(self)
+
+        # Add hosts and switch
+        h1 = self.addHost('h1')
+        h2 = self.addHost('h2')
+        h3 = self.addHost('h3')
+        switch = self.addSwitch('s1')
+
+        # Add links
+        self.addLink(h1, switch, bw=bandwidth, delay=DELAY, use_htb=True)
+        self.addLink(h2, switch, bw=bandwidth, delay=DELAY, use_htb=True)
+        self.addLink(switch, h3, bw=bandwidth, delay=DELAY, use_htb=True)
+
+
 class RC3Topo(Topo):	
 
     def __init__(self, bandwidth):
@@ -87,6 +105,56 @@ def rc3Test(bandwidth, flowLen):
 
     net.stop()
 
+def prioSwitchTest(bandwidth, interval, duration):
+    topo = RC3PrioSwitchTestTopo(bandwidth)
+    net = Mininet(topo, link=TCLink)
+    net.start()
+
+    print "Dumping node connections"
+    dumpNodeConnections(net.hosts)
+
+    h1, h2, h3, s1 = net.getNodeByName('h1', 'h2', 'h3', 's1')
+
+    print "Adding qdiscs"
+    addPrioQdisc(h1, 'h1-eth0')
+    addPrioQdisc(h2, 'h2-eth0')
+    addPrioQdisc(h3, 'h3-eth0')
+    addPrioQdisc(s1, 's1-eth1')
+    addPrioQdisc(s1, 's1-eth2')
+    addPrioQdisc(s1, 's1-eth3')
+
+    h1.cmd('killall iperf3')
+    h2.cmd('killall iperf3')
+    h3.cmd('killall iperf3')
+
+    print "Testing bandwidth with high and low priority flows..."
+    h3.popen('iperf3 -s -p 5001 -i 1 > servhi.log 2> servhi.log', shell=True) #high
+    h3.popen('iperf3 -s -p 5002 -i 1 > servlo.log 2> servlo.log', shell=True) #low
+
+    popens = {}
+    print 'launching low priority iperf'
+    popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %d -t %d -S 0x4 > outlo.csv' % 
+            (h3.IP(), interval, duration), shell=True)
+    sleep(5)
+    print 'launching high priority iperf'
+    popens['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %d -t %d -S 0x0  > outhi.csv' % 
+            (h3.IP(), interval, duration), shell=True)
+
+    times = duration
+    while times > 0:
+        s1.cmdPrint('tc -s class ls dev s1-eth3')
+        sleep(1)
+        times -= 1
+
+    popens['hiperf'].wait()
+    print 'high priority finished'
+
+    popens['loperf'].wait()
+    print 'low priority finished'
+
+    net.stop()
+
+
 def prioTest(bandwidth, interval, duration):
     topo = RC3Topo(bandwidth)
     net = Mininet(topo, link=TCLink)
@@ -133,12 +201,12 @@ def prioTest(bandwidth, interval, duration):
 
     net.stop()
 
-
 if __name__ == '__main__':
     lg.setLogLevel('info')
     #rc3Test(37, 20000)
-    prioTest(LINK_BW_1, 1, 20)
+    #prioTest(LINK_BW_1, 1, 20)
+    prioSwitchTest(LINK_BW_1, 1, 20)
 
-    plt.plot([1,2,3,4])
-    plt.ylabel('some numbers')
+    #plt.plot([1,2,3,4])
+    #plt.ylabel('some numbers')
    # plt.show()
