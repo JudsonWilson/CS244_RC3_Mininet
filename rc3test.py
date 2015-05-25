@@ -42,11 +42,8 @@ class RC3Topo(Topo):
 
 def addPrioQdisc(node, devStr):
     node.cmdPrint('tc qdisc del dev', devStr, 'root')
-
     node.cmdPrint('tc qdisc add dev' ,devStr, 'root handle 1: htb default 1')
-
     node.cmdPrint('tc class add dev', devStr, 'parent 1: classid 1:1 htb rate 100Mbit ceil 100Mbit')
-
     node.cmdPrint('tc qdisc add dev', devStr,
             'parent 1:1 handle 2:0 prio bands 8 priomap 0 1 2 3 4 5 6 7 7 7 7 7 7 7 7 7')
 
@@ -66,7 +63,6 @@ def rc3Test(bandwidth, flowLen):
     topo = RC3Topo(bandwidth)
     net = Mininet(topo, link=TCLink)
     net.start()
-
 
     print "Dumping node connections"
     dumpNodeConnections(net.hosts)
@@ -88,22 +84,6 @@ def rc3Test(bandwidth, flowLen):
     popens['hiperf'] = h1.popen('iperf -c %s -n %i -S 0x0 > hiperf.txt' % (h2.IP(), flowLen))
     print 'launching low priority iperf'
     popens['loperf'] = h1.popen('iperf -c %s -n %i -S 0x4 > loperf.txt' % (h2.IP(), flowLen))
-
-    '''
-    endTime = time() + 40 #seconds
-    for perf, line in pmonitor(popens, timeoutms=1000):
-        h1.cmdPrint('tc -s class ls dev h1-eth0')
-        if perf:
-            print '<%s>: %s' % (perf, line)
-        if time() >= endTime:
-            print 'timeout'
-            for p in popens.values():
-                p.send_signal( SIGINT )
-    '''
-
-    #TODO redirect iperf to files
-    #TODO parse files
-    #TODO display graph
 
     net.stop()
 
@@ -128,33 +108,22 @@ def prioTest(bandwidth, interval, duration):
     h2.popen('iperf3 -s -p 5001 -i 1 > servhi.log 2> servhi.log', shell=True) #high
     h2.popen('iperf3 -s -p 5002 -i 1 > servlo.log 2> servlo.log', shell=True) #low
 
-
     popens = {}
-    print 'launching low priority iperf'
-    popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %d -t %d -S 0x4 > outlo.csv' % 
-            (h2.IP(), interval, duration), shell=True)
-
-    sleep(5)
-
     print 'launching high priority iperf'
     popens['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %d -t %d -S 0x0  > outhi.csv' % 
             (h2.IP(), interval, duration), shell=True)
 
+    sleep(5)
 
+    print 'launching low priority iperf'
+    popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %d -t %d -S 0x4 > outlo.csv' % 
+            (h2.IP(), interval, duration), shell=True)
 
     times = duration
     while times > 0:
         h1.cmdPrint('tc -s class ls dev h1-eth0')
         sleep(1)
         times -= 1
-
-
-
-    
-    
-    
-    
-    
 
     popens['hiperf'].wait()
     print 'high priority finished'
@@ -165,7 +134,6 @@ def prioTest(bandwidth, interval, duration):
     net.stop()
 
 
-
 if __name__ == '__main__':
     lg.setLogLevel('info')
     #rc3Test(37, 20000)
@@ -173,4 +141,4 @@ if __name__ == '__main__':
 
     plt.plot([1,2,3,4])
     plt.ylabel('some numbers')
-    plt.show()
+   # plt.show()
