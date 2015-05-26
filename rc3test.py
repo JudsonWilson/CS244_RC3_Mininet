@@ -76,7 +76,69 @@ def addPrioQdisc(node, devStr):
     node.cmdPrint('tc class show dev', devStr)
     node.cmdPrint('tc filter show dev', devStr)
 
+def runPrioSwitchFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
+    topo = RC3PrioSwitchTestTopo(bandwidth)
+    net = Mininet(topo, link=TCLink)
+    net.start()
+
+    print "Dumping node connections"
+    dumpNodeConnections(net.hosts)
+
+    h1, h2, h3, s1 = net.getNodeByName('h1', 'h2', 'h3', 's1')
+
+    print "Adding qdiscs"
+    addPrioQdisc(h1, 'h1-eth0')
+    addPrioQdisc(h2, 'h2-eth0')
+    addPrioQdisc(h3, 'h2-eth0')
+    addPrioQdisc(s1, 's1-eth1')
+    addPrioQdisc(s1, 's1-eth2')
+    addPrioQdisc(s1, 's1-eth3')
+
+    h1.cmd('killall iperf3')
+    h2.cmd('killall iperf3')
+    h3.cmd('killall iperf3')
+
+    popens = {}
+
+    print "Testing bandwidth with high and low priority flows..."
+    popens['hiserv'] = h3.popen('iperf3 -s -p 5001 -1 -i %f -J > %s'% (interval, hiOut), shell=True)
+    popens['loserv'] = h3.popen('iperf3 -s -p 5002 -1 -i %f -J > %s'% (interval, loOut), shell=True)
+
+
+    if loFirst:
+        print 'launching low priority iperf'
+        popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
+                (h3.IP(), interval, duration+1), shell=True)
+    else:
+        print 'launching high priority iperf'
+        popens['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
+                (h3.IP(), interval, duration+1), shell=True)
+
+    sleep(duration/ 2)
+
+    if loFirst:
+        print 'launching high priority iperf'
+        popens['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
+                (h3.IP(), interval, (duration/2)+1), shell=True)
+    else:
+        print 'launching low priority iperf'
+        popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
+                (h3.IP(), interval, (duration/2)+1), shell=True)
+
+    popens['hiperf'].wait()
+    popens['loperf'].wait()
+    popens['hiserv'].wait()
+    popens['loserv'].wait()
+    print 'flows finished'
+
+    net.stop()
+
 def prioSwitchTest(bandwidth, interval, duration):
+    runPrioSwitchFlows(bandwidth, interval, duration, 'sservlo1.json', 'sservhi1.json', False)
+    runPrioSwitchFlows(bandwidth, interval, duration, 'sservlo2.json', 'sservhi2.json', True)
+    iperfPlotJSON('sservlo1.json', 'sservhi1.json', 'sservlo2.json', 'sservhi2.json', '', duration)
+
+    '''
     topo = RC3PrioSwitchTestTopo(bandwidth)
     net = Mininet(topo, link=TCLink)
     net.start()
@@ -124,6 +186,7 @@ def prioSwitchTest(bandwidth, interval, duration):
     print 'low priority finished'
 
     net.stop()
+    '''
 
 
 '''
@@ -254,7 +317,6 @@ def prioTest(bandwidth, interval, duration):
 
 if __name__ == '__main__':
     lg.setLogLevel('info')
-    #rc3Test(37, 20000)
-    prioTest(LINK_BW_1, 1, 60)
-    #prioSwitchTest(LINK_BW_1, 1, 20)
+    #prioTest(LINK_BW_1, 1, 60)
+    prioSwitchTest(LINK_BW_1, 1, 60)
 
