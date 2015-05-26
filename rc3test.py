@@ -130,15 +130,16 @@ def prioSwitchTest(bandwidth, interval, duration):
 parse the JSON output from iperf3 and return two arrays with time offsets and
 reported bandwidths
 '''
-def iperfParseJSON(filename, offset):
+def iperfParseJSON(filename, duration, offset):
     X = []
     Y = []
     with open(filename) as f:
         a = json.load(f)
     for interval in a['intervals']:
         stream = interval['streams'][0]
-        X.append(stream['end'] + offset)
-        Y.append(stream['bits_per_second'] / 1000000.0)
+        if stream['end'] + offset <= duration:
+            X.append(stream['end'] + offset)
+            Y.append(stream['bits_per_second'] / 1000000.0)
 
     return (X, Y)
 
@@ -146,35 +147,50 @@ def iperfParseJSON(filename, offset):
 Plot four json files and output as outfile. lofile1 and hifile1 are the flows
 for the first test (low priority starts after high priority) and lofile2 and 
 hifile2 are for the second test (high priority starts after low priority).
-offset is the number of seconds (+/-) that the high priority flow started after
-the low priority flow
 '''
-def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile, offset):
-    loOffset = 0
-    hiOffset = 0
+def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration):
+    plt.figure(1)
+    plt.suptitle('Correctness of Priority Queueing in Linux')
 
-    if (offset > 0):
-        hiOffset = offset
-    else:
-        loOffset = -offset
+    plt.subplot(121)
+    plt.xlabel('Time (s)')
+    plt.ylabel('Throughput (Mbps)')
 
-    loData = iperfParseJSON(lofile2, loOffset)
+    loData = iperfParseJSON(lofile1, duration, duration/2)
     loX = loData[0]
     loY = loData[1]
     print('loY: ', loY)
+
     plt.plot(loX, loY, linewidth=2.0, label='Low Priority')
 
-    hiData = iperfParseJSON(hifile2, hiOffset)
+    hiData = iperfParseJSON(hifile1, duration, 0)
     hiX = hiData[0]
     hiY = hiData[1]
-
     print('hiY: ', hiY)
     plt.plot(hiX, hiY, linewidth=2.0, label='High Priority')
 
+    plt.legend(loc='lower left')
+
+
+    plt.subplot(122)
     plt.xlabel('Time (s)')
     plt.ylabel('Throughput (Mbps)')
-    plt.title('Correctness of Priority Queueing in Linux')
+
+    loData = iperfParseJSON(lofile2, duration, 0)
+    loX = loData[0]
+    loY = loData[1]
+    plt.plot(loX, loY, linewidth=2.0, label='Low Priority')
+    print('loY: ', loY)
+
+    hiData = iperfParseJSON(hifile2, duration, duration/2)
+    hiX = hiData[0]
+    hiY = hiData[1]
+    plt.plot(hiX, hiY, linewidth=2.0, label='High Priority')
+    print('hiY: ', hiY)
+
     plt.legend(loc='lower left')
+
+
     plt.show()
 
 
@@ -196,41 +212,45 @@ def runPrioFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
     h1.cmd('killall iperf3')
     h2.cmd('killall iperf3')
 
-    print "Testing bandwidth with high and low priority flows..."
-    h2.popen('iperf3 -s -p 5001 -i %f -J > %s'% (interval, hiOut), shell=True) #high
-    h2.popen('iperf3 -s -p 5002 -i %f -J > %s'% (interval, loOut), shell=True) #low
-
     popens = {}
+
+    print "Testing bandwidth with high and low priority flows..."
+    popens['hiserv'] = h2.popen('iperf3 -s -p 5001 -1 -i %f -J > %s'% (interval, hiOut), shell=True)
+    popens['loserv'] = h2.popen('iperf3 -s -p 5002 -1 -i %f -J > %s'% (interval, loOut), shell=True)
+
 
     if loFirst:
         print 'launching low priority iperf'
         popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
-                (h2.IP(), interval, duration), shell=True)
+                (h2.IP(), interval, duration+1), shell=True)
     else:
         print 'launching high priority iperf'
         popens['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
-                (h2.IP(), interval, duration), shell=True)
+                (h2.IP(), interval, duration+1), shell=True)
 
     sleep(duration/ 2)
 
     if loFirst:
         print 'launching high priority iperf'
         popens['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
-                (h2.IP(), interval, duration/2), shell=True)
+                (h2.IP(), interval, (duration/2)+1), shell=True)
     else:
         print 'launching low priority iperf'
         popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
-                (h2.IP(), interval, duration/2), shell=True)
+                (h2.IP(), interval, (duration/2)+1), shell=True)
 
     popens['hiperf'].wait()
     popens['loperf'].wait()
+    popens['hiserv'].wait()
+    popens['loserv'].wait()
     print 'flows finished'
 
     net.stop()
 
 def prioTest(bandwidth, interval, duration):
-    runPrioFlows(bandwidth, interval, duration, 'servlo.json', 'servhi.json', False)
-    iperfPlotJSON('', '', 'servlo.json', 'servhi.json', '', -(duration/2))
+    runPrioFlows(bandwidth, interval, duration, 'servlo1.json', 'servhi1.json', False)
+    runPrioFlows(bandwidth, interval, duration, 'servlo2.json', 'servhi2.json', True)
+    iperfPlotJSON('servlo1.json', 'servhi1.json', 'servlo2.json', 'servhi2.json', '', duration)
 
 if __name__ == '__main__':
     lg.setLogLevel('info')
