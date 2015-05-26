@@ -89,7 +89,7 @@ def runPrioSwitchFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
     print "Adding qdiscs"
     addPrioQdisc(h1, 'h1-eth0')
     addPrioQdisc(h2, 'h2-eth0')
-    addPrioQdisc(h3, 'h2-eth0')
+    addPrioQdisc(h3, 'h3-eth0')
     addPrioQdisc(s1, 's1-eth1')
     addPrioQdisc(s1, 's1-eth2')
     addPrioQdisc(s1, 's1-eth3')
@@ -136,57 +136,7 @@ def runPrioSwitchFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
 def prioSwitchTest(bandwidth, interval, duration):
     runPrioSwitchFlows(bandwidth, interval, duration, 'sservlo1.json', 'sservhi1.json', False)
     runPrioSwitchFlows(bandwidth, interval, duration, 'sservlo2.json', 'sservhi2.json', True)
-    iperfPlotJSON('sservlo1.json', 'sservhi1.json', 'sservlo2.json', 'sservhi2.json', '', duration)
-
-    '''
-    topo = RC3PrioSwitchTestTopo(bandwidth)
-    net = Mininet(topo, link=TCLink)
-    net.start()
-
-    print "Dumping node connections"
-    dumpNodeConnections(net.hosts)
-
-    h1, h2, h3, s1 = net.getNodeByName('h1', 'h2', 'h3', 's1')
-
-    print "Adding qdiscs"
-    addPrioQdisc(h1, 'h1-eth0')
-    addPrioQdisc(h2, 'h2-eth0')
-    addPrioQdisc(h3, 'h3-eth0')
-    addPrioQdisc(s1, 's1-eth1')
-    addPrioQdisc(s1, 's1-eth2')
-    addPrioQdisc(s1, 's1-eth3')
-
-    h1.cmd('killall iperf3')
-    h2.cmd('killall iperf3')
-    h3.cmd('killall iperf3')
-
-    print "Testing bandwidth with high and low priority flows..."
-    h3.popen('iperf3 -s -p 5001 -i 1 > servhi.log 2> servhi.log', shell=True) #high
-    h3.popen('iperf3 -s -p 5002 -i 1 > servlo.log 2> servlo.log', shell=True) #low
-
-    popens = {}
-    print 'launching low priority iperf'
-    popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %d -t %d -S 0x4 > outlo.csv' % 
-            (h3.IP(), interval, duration+20), shell=True)
-    sleep(5)
-    print 'launching high priority iperf'
-    popens['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %d -t %d -S 0x0  > outhi.csv' % 
-            (h3.IP(), interval, duration), shell=True)
-
-    times = duration + 20
-    while times > 0:
-        s1.cmdPrint('tc -s class ls dev s1-eth3')
-        sleep(1)
-        times -= 1
-
-    popens['hiperf'].wait()
-    print 'high priority finished'
-
-    popens['loperf'].wait()
-    print 'low priority finished'
-
-    net.stop()
-    '''
+    iperfPlotJSON('sservlo1.json', 'sservhi1.json', 'sservlo2.json', 'sservhi2.json', 'figure_17.png', duration, 'Correctness of Priority Queueing in the Switch')
 
 
 '''
@@ -211,9 +161,12 @@ Plot four json files and output as outfile. lofile1 and hifile1 are the flows
 for the first test (low priority starts after high priority) and lofile2 and 
 hifile2 are for the second test (high priority starts after low priority).
 '''
-def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration):
-    plt.figure(1)
-    plt.suptitle('Correctness of Priority Queueing in Linux')
+def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration, title):
+    plt.clf()
+    plt.cla()
+
+    plt.figure(figsize=(15, 6))
+    plt.suptitle(title)
 
     plt.subplot(121)
     plt.xlabel('Time (s)')
@@ -254,7 +207,8 @@ def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration):
     plt.legend(loc='lower left')
 
 
-    plt.show()
+    plt.savefig(outfile, dpi=300)
+    print('plot saved to ',outfile)
 
 
 
@@ -313,10 +267,10 @@ def runPrioFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
 def prioTest(bandwidth, interval, duration):
     runPrioFlows(bandwidth, interval, duration, 'servlo1.json', 'servhi1.json', False)
     runPrioFlows(bandwidth, interval, duration, 'servlo2.json', 'servhi2.json', True)
-    iperfPlotJSON('servlo1.json', 'servhi1.json', 'servlo2.json', 'servhi2.json', '', duration)
+    iperfPlotJSON('servlo1.json', 'servhi1.json', 'servlo2.json', 'servhi2.json', 'figure_16.png', duration, 'Correctness of Priority Queueing in Linux')
 
 if __name__ == '__main__':
     lg.setLogLevel('info')
-    #prioTest(LINK_BW_1, 1, 60)
+    prioTest(LINK_BW_1, 1, 60)
     prioSwitchTest(LINK_BW_1, 1, 60)
 
