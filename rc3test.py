@@ -165,7 +165,7 @@ def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration, title):
     plt.clf()
     plt.cla()
 
-    plt.figure(figsize=(15, 6))
+    plt.figure(figsize=(13, 5))
     plt.suptitle(title)
 
     plt.subplot(121)
@@ -207,7 +207,7 @@ def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration, title):
     plt.legend(loc='lower left')
 
 
-    plt.savefig(outfile, dpi=300)
+    plt.savefig(outfile, bbox_inches='tight')
     print('plot saved to ',outfile)
 
 
