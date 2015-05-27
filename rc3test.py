@@ -57,24 +57,48 @@ class RC3PrioTopo(Topo):
         self.addLink(h1, h2, bw=bandwidth, delay=DELAY, use_htb=True)
 
 
-def addPrioQdisc(node, devStr):
-    node.cmdPrint('tc qdisc del dev', devStr, 'root')
-    node.cmdPrint('tc qdisc add dev' ,devStr, 'root handle 1: htb default 1')
-    node.cmdPrint('tc class add dev', devStr, 'parent 1: classid 1:1 htb rate 100Mbit ceil 100Mbit')
-    node.cmdPrint('tc qdisc add dev', devStr,
-            'parent 1:1 handle 2:0 prio bands 8 priomap 0 1 2 3 4 5 6 7 7 7 7 7 7 7 7 7')
+def addPrioQdisc(node, devStr, bandwidth, delay=None):
+    '''Setup the HTB, prio qdisc, netem, etc.
 
-    node.cmdPrint('tc filter add dev', devStr, 'parent 2:0 protocol ip prio 10 u32 match ip tos 0x00 0xff flowid 2:1')
-    node.cmdPrint('tc filter add dev', devStr, 'parent 2:0 protocol ip prio 10 u32 match ip tos 0x04 0xff flowid 2:2')
-    node.cmdPrint('tc filter add dev', devStr, 'parent 2:0 protocol ip prio 10 u32 match ip tos 0x08 0xff flowid 2:3')
-    node.cmdPrint('tc filter add dev', devStr, 'parent 2:0 protocol ip prio 10 u32 match ip tos 0x0c 0xff flowid 2:4')
-    node.cmdPrint('tc filter add dev', devStr, 'parent 2:0 protocol ip prio 10 u32 match ip tos 0x10 0xff flowid 2:5')
+    node: Network node, e.g. h1, h2, s1
+    devStr: Device name string, e.g. 'h1-eth0'
+    bandwidth: A number, representing amount of Mbps
+    delay: a string, such as 10us, or None for no delay.
+    '''
 
-    #node.cmdPrint('ifconfig', devStr, 'txqueuelen 150')
-
-    node.cmdPrint('tc qdisc show')
+    print devStr, "Initial tc Configuration ==========================="
+    node.cmdPrint('tc qdisc show dev', devStr)
     node.cmdPrint('tc class show dev', devStr)
-    node.cmdPrint('tc filter show dev', devStr)
+
+    print devStr, "Setting tc Configuration ==========================="
+    node.cmdPrint('tc qdisc del dev', devStr, 'root');
+    node.cmdPrint('tc qdisc add dev', devStr, 'root handle 1: htb default 1')
+    # TODO
+    print "TODO: Set burst rates to match original?"
+    rate = "%fMbit" % bandwidth
+    node.cmdPrint('tc class add dev', devStr, 'classid 1:1 parent 1: htb rate',
+                  rate, 'ceil', rate)
+    # prio qdisc for priority queues. priomap mostly ignored, use filters below
+    node.cmdPrint('tc qdisc add dev', devStr,
+                  'parent 1:1 handle 2:0 prio bands 8 '
+                  'priomap 0 1 2 3 4 5 6 7 7 7 7 7 7 7 7 7')
+    # netem qdiscs at leaves if delay is wanted.
+    if delay is not None:
+        for i in range(1, 5+1):
+            node.cmdPrint('tc qdisc add dev %s parent 15:%d handle 15%d:'
+                          ' netem delay %s limit 1000' % (devStr, i, i, delay))
+    # filters to match the ToS bit settings used by RC3 and put in prio queues
+    for (i,tos) in zip(range(1, 5+1), ['0x00','0x04','0x08','0x0c','0x10']):
+        node.cmdPrint('tc filter add dev %s parent 2:0 protocol ip'
+                      ' prio 10 u32 match ip tos %s 0xff flowid 2:%d'
+                      % (devStr, tos, i))
+
+    print devStr, "Custom tc Configuration ============================"
+
+    node.cmdPrint('tc qdisc show dev', devStr)
+    node.cmdPrint('tc class show dev', devStr)
+    node.cmdPrint('tc filter show dev', devStr, 'parent 15:0')
+    #node.cmdPrint('tc -s class ls dev', devStr)
 
 def runPrioSwitchFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
     topo = RC3PrioSwitchTestTopo(bandwidth)
@@ -87,12 +111,12 @@ def runPrioSwitchFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
     h1, h2, h3, s1 = net.getNodeByName('h1', 'h2', 'h3', 's1')
 
     print "Adding qdiscs"
-    addPrioQdisc(h1, 'h1-eth0')
-    addPrioQdisc(h2, 'h2-eth0')
-    addPrioQdisc(h3, 'h3-eth0')
-    addPrioQdisc(s1, 's1-eth1')
-    addPrioQdisc(s1, 's1-eth2')
-    addPrioQdisc(s1, 's1-eth3')
+    addPrioQdisc(h1, 'h1-eth0', bandwidth=bandwidth)
+    addPrioQdisc(h2, 'h2-eth0', bandwidth=bandwidth)
+    addPrioQdisc(h3, 'h3-eth0', bandwidth=bandwidth)
+    addPrioQdisc(s1, 's1-eth1', bandwidth=bandwidth)
+    addPrioQdisc(s1, 's1-eth2', bandwidth=bandwidth)
+    addPrioQdisc(s1, 's1-eth3', bandwidth=bandwidth)
 
     h1.cmd('killall iperf3')
     h2.cmd('killall iperf3')
@@ -223,8 +247,8 @@ def runPrioFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
     h1, h2 = net.getNodeByName('h1', 'h2')
 
     print "Adding qdiscs"
-    addPrioQdisc(h1, 'h1-eth0')
-    addPrioQdisc(h2, 'h2-eth0')
+    addPrioQdisc(h1, 'h1-eth0', bandwidth=bandwidth)
+    addPrioQdisc(h2, 'h2-eth0', bandwidth=bandwidth)
 
     h1.cmd('killall iperf3')
     h2.cmd('killall iperf3')
