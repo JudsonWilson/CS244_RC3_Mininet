@@ -39,9 +39,9 @@ def figure15a_paper_data():
         1460    :{'Simulated Regular TCP':{'mean':0.0296,'stddev':0},
                   'Simulated RC3'        :{'mean':0.0296,'stddev':0},
                   'Real Regular TCP'     :{'mean':0.0296,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0296,'stddev':0.00022},
                   'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
                   'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
-                  'Real RC3'             :{'mean':0.0296,'stddev':0.00022},
                  },
         7300    :{'Simulated Regular TCP':{'mean':0.0296,'stddev':0},
                   'Simulated RC3'        :{'mean':0.0296,'stddev':0},
@@ -102,7 +102,88 @@ def figure15a_paper_data():
                         'Mininet Regular TCP':'#0e9a0a',
                         'Mininet RC3':'k'}
 
-    return (data, flow_types, flow_type_colors, "Figure 15(a)")
+    return (data, flow_types, flow_type_colors, "")
+
+def figure15b_paper_data():
+    '''Populate data struct for plot, using data from figure 15b in paper.
+
+    For plotBarClusters() below. Fill in "Mininet ..." fields with test data.
+
+    Extracted manually from paper using this tool:
+    http://arohatgi.info/WebPlotDigitizer/app/
+    '''
+
+    flow_completion_times = [1460, 7300, 14600, 73000, 146000, 730000, 1460000]
+
+    data = {
+        1460    :{'Simulated Regular TCP':{'mean':0.0296,'stddev':0},
+                  'Simulated RC3'        :{'mean':0.0296,'stddev':0},
+                  'Real Regular TCP'     :{'mean':0.0296,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0296,'stddev':0.00022},
+                  'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
+                  'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
+                 },
+        7300    :{'Simulated Regular TCP':{'mean':0.0296,'stddev':0},
+                  'Simulated RC3'        :{'mean':0.0296,'stddev':0},
+                  'Real Regular TCP'     :{'mean':0.0296,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0296,'stddev':0.00022},
+                  'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
+                  'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
+                 },
+        14600   :{'Simulated Regular TCP':{'mean':0.0296,'stddev':0},
+                  'Simulated RC3'        :{'mean':0.0296,'stddev':0},
+                  'Real Regular TCP'     :{'mean':0.0300,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0300,'stddev':0.00022},
+                  'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
+                  'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
+                  },
+        73000   :{'Simulated Regular TCP':{'mean':0.0700,'stddev':0},
+                  'Simulated RC3'        :{'mean':0.0300,'stddev':0},
+                  'Real Regular TCP'     :{'mean':0.0704,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0304,'stddev':0.00022},
+                  'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
+                  'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
+                 },
+        146000  :{'Simulated Regular TCP':{'mean':0.0904,'stddev':0},
+                  'Simulated RC3'        :{'mean':0.0307,'stddev':0},
+                  'Real Regular TCP'     :{'mean':0.0907,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0312,'stddev':0.00022},
+                  'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
+                  'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
+                 },
+        730000  :{'Simulated Regular TCP':{'mean':0.1330,'stddev':0},
+                  'Simulated RC3'        :{'mean':0.0356,'stddev':0},
+                  'Real Regular TCP'     :{'mean':0.1353,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0392,'stddev':0.00022},
+                  'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
+                  'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
+                 },
+        1460000 :{'Simulated Regular TCP':{'mean':0.1554,'stddev':0},
+                  'Simulated RC3'        :{'mean':0.0415,'stddev':0},
+                  'Real Regular TCP'     :{'mean':0.1608,'stddev':0.00022},
+                  'Real RC3'             :{'mean':0.0600,'stddev':0.00022},
+                  'Mininet Regular TCP'  :{'mean':0,'stddev':0}, #dummy
+                  'Mininet RC3'          :{'mean':0,'stddev':0}, #dummy
+                 },
+    }
+
+    flow_types = ['Simulated Regular TCP',
+                  'Simulated RC3',
+                  'Real Regular TCP',
+                  'Real RC3',
+                  'Mininet Regular TCP',
+                  'Mininet RC3']
+
+
+    flow_type_colors = {'Simulated Regular TCP':'#990000',
+                        'Simulated RC3':'#999999',
+                        'Real Regular TCP':'#0066cc',
+                        'Real RC3':'#ffa700',
+                        'Mininet Regular TCP':'#0e9a0a',
+                        'Mininet RC3':'k'}
+
+    return (data, flow_types, flow_type_colors, "")
+
 
 def plotBarClusers(plot_data, flow_types, flow_type_colors, title="",
                    fig_file_name = None):
@@ -176,11 +257,14 @@ def plotBarClusers(plot_data, flow_types, flow_type_colors, title="",
     if fig_file_name is not None:
       plt.savefig(fig_file_name)
 
-    plt.show()
+    #plt.show()
 
 if __name__ == "__main__":
     '''Debug mode function to test code above.'''
     (data, flow_types, flow_type_colors, title) = figure15a_paper_data()
     plotBarClusers(data, flow_types, flow_type_colors, title)
+    (data, flow_types, flow_type_colors, title) = figure15b_paper_data()
+    plotBarClusers(data, flow_types, flow_type_colors, title)
+
 
 

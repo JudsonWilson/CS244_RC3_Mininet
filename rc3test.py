@@ -15,18 +15,40 @@ import json
 import matplotlib.pyplot as plt
 from figure15_helpers import *
 
-# Actual experiment was 10Gbps and 1Gbps with an RTT of 20ms.
+
+
+# Below are the settings used to produce Figures 15 (a) and (b)
+# from the paper, with original data and additional Mininet tests.
+# Actual experiment used 10Gbps and 1Gbps rates with an RTT of 20ms.
 # We reduce the link speed and increase the latency to maintain
 # the same Bandwidth-Delay Product
-
-LINK_BW_1 = 100 # 100Mbps
-LINK_BW_2 = 10 # 10Mbps
-
-#DELAY = '500ms' # 0.5s, RTT=2s
-DELAY = '1000ms' # TODO remove (test)
+RC3_fct_test_configs = [
+    # Figure 15(a)
+    # 10Gbps x 20us RTT test, scaled rate down by 100, delay up by 100
+    {
+        'bandwidth': 100, # 100 Mbps
+        'delay': '1000ms', # Delay is only at the host.
+        'time_scale_factor': 1.0/100.0, # Rate by 1/100, delay by 100
+        'flows_per_test': 10,
+        'starter_data_function': figure15a_paper_data,
+        'fig_file_name': 'figure_15a.png',
+        'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
+    },
+    # Figure 15(b)
+    # 1Gbps x 20us RTT test, scaled rate down by 10, delay up by 10
+    {
+        'bandwidth': 100, # 10 Mbps
+        'delay': '100ms', # Delay is only at the host.
+        'time_scale_factor': 1.0/10.0, # Rate by 1/100, delay by 100
+        'flows_per_test': 10,
+        'starter_data_function': figure15b_paper_data,
+        'fig_file_name': 'figure_15b.png',
+        'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
+    }
+]
 
 class PrioSwitchTestTopo(Topo):
-    def __init__(self, bandwidth):
+    def __init__(self, bandwidth, delay):
 
         #Initialize Topology
         Topo.__init__(self)
@@ -38,14 +60,14 @@ class PrioSwitchTestTopo(Topo):
         switch = self.addSwitch('s1')
 
         # Add links
-        self.addLink(h1, switch, bw=bandwidth, delay=DELAY, use_htb=True)
-        self.addLink(h2, switch, bw=bandwidth, delay=DELAY, use_htb=True)
-        self.addLink(switch, h3, bw=bandwidth, delay=DELAY, use_htb=True)
+        self.addLink(h1, switch, bw=bandwidth, delay=delay, use_htb=True)
+        self.addLink(h2, switch, bw=bandwidth, delay=delay, use_htb=True)
+        self.addLink(switch, h3, bw=bandwidth, delay=delay, use_htb=True)
 
 
 class PrioTestTopo(Topo):
 
-    def __init__(self, bandwidth):
+    def __init__(self, bandwidth, delay):
 
         #Initialize Topology
         Topo.__init__(self)
@@ -55,7 +77,7 @@ class PrioTestTopo(Topo):
         h2 = self.addHost('h2')
 
         # Add links
-        self.addLink(h1, h2, bw=bandwidth, delay=DELAY, use_htb=True)
+        self.addLink(h1, h2, bw=bandwidth, delay=delay, use_htb=True)
 
 class RC3Topo(Topo):
 
@@ -117,8 +139,8 @@ def addPrioQdisc(node, devStr, bandwidth, delay=None):
     node.cmdPrint('tc filter show dev', devStr, 'parent 15:0')
     #node.cmdPrint('tc -s class ls dev', devStr)
 
-def runPrioSwitchFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
-    topo = PrioSwitchTestTopo(bandwidth)
+def runPrioSwitchFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFirst):
+    topo = PrioSwitchTestTopo(bandwidth, delay)
     net = Mininet(topo, link=TCLink)
     net.start()
 
@@ -174,9 +196,9 @@ def runPrioSwitchFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
 
     net.stop()
 
-def prioSwitchTest(bandwidth, interval, duration):
-    runPrioSwitchFlows(bandwidth, interval, duration, 'sservlo1.json', 'sservhi1.json', False)
-    runPrioSwitchFlows(bandwidth, interval, duration, 'sservlo2.json', 'sservhi2.json', True)
+def prioSwitchTest(bandwidth, delay, interval, duration):
+    runPrioSwitchFlows(bandwidth, delay, interval, duration, 'sservlo1.json', 'sservhi1.json', False)
+    runPrioSwitchFlows(bandwidth, delay, interval, duration, 'sservlo2.json', 'sservhi2.json', True)
     iperfPlotJSON('sservlo1.json', 'sservhi1.json', 'sservlo2.json', 'sservhi2.json', 'figure_17.png', duration, 'Correctness of Priority Queueing in the Switch')
 
 
@@ -253,8 +275,8 @@ def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration, title):
 
 
 
-def runPrioFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
-    topo = PrioTestTopo(bandwidth)
+def runPrioFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFirst):
+    topo = PrioTestTopo(bandwidth, delay)
     net = Mininet(topo, link=TCLink)
     net.start()
 
@@ -305,13 +327,13 @@ def runPrioFlows(bandwidth, interval, duration, loOut, hiOut, loFirst):
 
     net.stop()
 
-def prioTest(bandwidth, interval, duration):
-    runPrioFlows(bandwidth, interval, duration, 'servlo1.json', 'servhi1.json', False)
-    runPrioFlows(bandwidth, interval, duration, 'servlo2.json', 'servhi2.json', True)
+def prioTest(bandwidth, delay, interval, duration):
+    runPrioFlows(bandwidth, delay, interval, duration, 'servlo1.json', 'servhi1.json', False)
+    runPrioFlows(bandwidth, delay, interval, duration, 'servlo2.json', 'servhi2.json', True)
     iperfPlotJSON('servlo1.json', 'servhi1.json', 'servlo2.json', 'servhi2.json', 'figure_16.png', duration, 'Correctness of Priority Queueing in Linux')
 
 def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
-                 fig_file_name = None):
+                 fig_file_name, fct_offset):
     '''Run a series of flow completion time tests, and make a bar chart.
 
     net: Mininet net object.
@@ -324,12 +346,14 @@ def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
         structure for plotting. This is used to get the data from the paper
         figures 15(a) and 15(b). See figure15_helpers.py.
     fig_file_name: If specified, where to save the resulting plot.
+    fct_offset: Offset time (in post-scaling units) to adjust for difference
+        in measuring technique.
     '''
 
     # Flow lengths for the flow completion times.
-#    flow_lengths = [1460, 7300, 14600, 73000, 146000, 730000, 1460000]
+    flow_lengths = [1460, 7300, 14600, 73000, 146000, 730000, 1460000]
     # For debug:
-    flow_lengths = [730000]
+    #flow_lengths = [730000]
 
     # Start with the bar-graph data from the paper
     (data, flow_types, flow_type_colors, title) = starter_data_function()
@@ -342,8 +366,9 @@ def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
             results = fct_test(net, iterations=iterations, size=flow_length,
                                use_rc3=rc3)
             print "results", results
+            o = fct_offset
             s = time_scale_factor * 0.001 # external scale and msecs to secs
-            data[flow_length][flow_type] = {'mean'  : s * avg(results),
+            data[flow_length][flow_type] = {'mean'  : o + s * avg(results),
                                             'stddev': s * stddev(results)}
 
     plotBarClusers(data, flow_types, flow_type_colors, title, fig_file_name)
@@ -409,65 +434,96 @@ def setupNetVariables():
     for setting in settings:
         subprocess.call("sysctl %s" % (setting,), shell=True)
 
-def rc3Test(bandwidth, flowLen):
+def rc3Test(configs):
+    ''' Run a test of flow completion times according to config.
+
+    configs: A dictionary with the following keys:
+        'bandwidth': The speed of the links in Mbps.
+        'delay': The delay to use at each host egress, such as '100ms'
+        'time_scale_factor': Amount to scale down flow completion times due
+             to delay/rate scaling. E.g. if rate is scaled down by 100, and
+             delay is scaled up by 100, then time_scale_factor = 1.0/100.0
+        'flows_per_test': Number of times to do a flow completion test
+             for each flow length.
+        'starter_data_function': A function which returns plot data to augment
+             with the test results. See figure15_helpers.py
+        'fig_file_name': Name to use for plot output file.
+        'fct_offset': Offset time (in post-scaling units) to adjust for
+             difference in measuring technique.
+    '''
     setupNetVariables()
 
-    topo = RC3Topo(bandwidth)
+    topo = RC3Topo(100) # Rate will be overridden by qdiscs
     net = Mininet(topo, link=TCLink)
     net.start()
 
     print "Dumping node connections"
     dumpNodeConnections(net.hosts)
 
-    h1, h2 = net.getNodeByName('h1', 'h2')
+    h1, h2, s1 = net.getNodeByName('h1', 'h2', 's1')
 
-    print "Configuring qdiscs"
-    addPrioQdisc(h1, 'h1-eth0', bandwidth=bandwidth, delay=DELAY)
-    addPrioQdisc(h2, 'h2-eth0', bandwidth=bandwidth, delay=DELAY)
-    #TODO do we need this at the switch too?
+    # Do test under each configuration.
+    for config in configs:
+        bandwidth = config['bandwidth']
+        delay = config['delay']
+        time_scale_factor = config['time_scale_factor']
+        flows_per_test = config['flows_per_test']
+        starter_data_function = config['starter_data_function']
+        fig_file_name = config['fig_file_name']
+        fct_offset = config['fct_offset']
 
-    #print "Testing bandwidth between 'h1' and 'h2'"
-    #h2.sendCmd('iperf -s')
-    #result = h1.cmd('iperf -c', h2.IP(), '-n', flowLen)
-    #print result
+        print "Configuring qdiscs"
+        addPrioQdisc(h1, 'h1-eth0', bandwidth=bandwidth, delay=delay)
+        addPrioQdisc(h2, 'h2-eth0', bandwidth=bandwidth, delay=delay)
+        addPrioQdisc(s1, 's1-eth1', bandwidth=bandwidth) # No delay
+        addPrioQdisc(s1, 's1-eth2', bandwidth=bandwidth) # No delay
 
-    # TODO global?
-    # Link delay is scaled by 100, and rate by 1/100, so flow completion times
-    # must be scaled by 1/100
-    time_scale_factor = 1.0/100
+        #print "Testing bandwidth between 'h1' and 'h2'"
+        #h2.sendCmd('iperf -s')
+        #result = h1.cmd('iperf -c', h2.IP(), '-n', flowLen)
+        #print result
 
-    # TODO FIXME
-    # scale_factor = 1.0/10
+        # TODO These don't seem to help, at 100 or 10000
 
-    # TODO These don't seem to help, at 100 or 10000
+        #h1.cmdPrint("ifconfig h1-eth0 txqueuelen 100")
+        #h1.cmdPrint("ifconfig lo txqueuelen 100")
+        #h1.cmdPrint("ifconfig")
+        #h2.cmdPrint("ifconfig h2-eth0 txqueuelen 100")
+        #h2.cmdPrint("ifconfig lo txqueuelen 100")
+        #h2.cmdPrint("ifconfig")
 
-    #h1.cmdPrint("ifconfig h1-eth0 txqueuelen 100")
-    #h1.cmdPrint("ifconfig lo txqueuelen 100")
-    #h1.cmdPrint("ifconfig")
-    #h2.cmdPrint("ifconfig h2-eth0 txqueuelen 100")
-    #h2.cmdPrint("ifconfig lo txqueuelen 100")
-    #h2.cmdPrint("ifconfig")
+        #h1.cmdPrint("ifconfig h1-eth0 txqueuelen 100")
+        #h1.cmdPrint("ifconfig lo txqueuelen 100")
+        #h1.cmdPrint("ifconfig")
+        #h2.cmdPrint("ifconfig h2-eth0 txqueuelen 100")
+        #h2.cmdPrint("ifconfig lo txqueuelen 100")
+        #h2.cmdPrint("ifconfig")
 
-    #h1.cmdPrint("ifconfig h1-eth0 txqueuelen 100")
-    #h1.cmdPrint("ifconfig lo txqueuelen 100")
-    #h1.cmdPrint("ifconfig")
-    #h2.cmdPrint("ifconfig h2-eth0 txqueuelen 100")
-    #h2.cmdPrint("ifconfig lo txqueuelen 100")
-    #h2.cmdPrint("ifconfig")
+        #CLI(net)
 
-    #CLI(net)
+        do_fct_tests(net, flows_per_test, time_scale_factor=time_scale_factor,
+                     starter_data_function = starter_data_function,
+                     fig_file_name = fig_file_name, fct_offset=fct_offset)
 
-    do_fct_tests(net, 3, time_scale_factor=time_scale_factor,
-                 starter_data_function = figure15a_paper_data,
-                 fig_file_name = 'figure15a.png')
-
-    #CLI(net)
+        #CLI(net)
 
     net.stop()
 
 if __name__ == '__main__':
     lg.setLogLevel('info')
-    prioTest(LINK_BW_1, 1, 60)
-    prioSwitchTest(LINK_BW_1, 1, 60)
-    rc3Test(LINK_BW_1, 20000000)
+
+    # Priority Queue Test - With direct host connections.
+    # Run at 100Mbps with 2ms link delay because that appears to be stable
+    # and reasonably fast, and use 2ms link delay for faster completion
+    # of slow start.
+    prioTest(100, '2ms', 1, 60)
+
+    # Priority Queue Test - With switch.
+    # Run at 100Mbps with 2ms link delay because that appears to be stable
+    # and reasonably fast, and use 2ms link delay for faster completion
+    # of slow start.
+    prioSwitchTest(100, '2ms', 1, 60)
+
+    # Flow Completion Time Tests
+    rc3Test(RC3_fct_test_configs)
 
