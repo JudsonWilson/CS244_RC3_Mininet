@@ -222,10 +222,15 @@ def runPrioSwitchFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFir
     net.stop()
 
 def prioSwitchTest(bandwidth, delay, interval, duration):
-    runPrioSwitchFlows(bandwidth, delay, interval, duration, 'sservlo1.json', 'sservhi1.json', False)
-    runPrioSwitchFlows(bandwidth, delay, interval, duration, 'sservlo2.json', 'sservhi2.json', True)
-    iperfPlotJSON('sservlo1.json', 'sservhi1.json', 'sservlo2.json', 'sservhi2.json', args.output_dir + '/figure_17.png', duration, 'Correctness of Priority Queueing in the Switch')
-
+    odir = args.output_dir
+    runPrioSwitchFlows(bandwidth, delay, interval, duration,
+                       odir + '/sservlo1.json', odir + '/sservhi1.json', False)
+    runPrioSwitchFlows(bandwidth, delay, interval, duration,
+                       odir + '/sservlo2.json', odir + '/sservhi2.json', True)
+    iperfPlotJSON(odir + '/sservlo1.json',odir + '/sservhi1.json',
+                  odir + '/sservlo2.json', odir + '/sservhi2.json',
+                  odir + '/figure_17.png', duration,
+                  'Correctness of Priority Queueing in the Switch')
 
 '''
 parse the JSON output from iperf3 and return two arrays with time offsets and
@@ -353,9 +358,15 @@ def runPrioFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFirst):
     net.stop()
 
 def prioTest(bandwidth, delay, interval, duration):
-    runPrioFlows(bandwidth, delay, interval, duration, 'servlo1.json', 'servhi1.json', False)
-    runPrioFlows(bandwidth, delay, interval, duration, 'servlo2.json', 'servhi2.json', True)
-    iperfPlotJSON('servlo1.json', 'servhi1.json', 'servlo2.json', 'servhi2.json', args.output_dir + '/figure_16.png', duration, 'Correctness of Priority Queueing in Linux')
+    odir = args.output_dir
+    runPrioFlows(bandwidth, delay, interval, duration,
+                 odir + '/servlo1.json', odir + '/servhi1.json', False)
+    runPrioFlows(bandwidth, delay, interval, duration,
+                 odir + '/servlo2.json', odir + '/servhi2.json', True)
+    iperfPlotJSON(odir + '/servlo1.json', odir + '/servhi1.json',
+                  odir + '/servlo2.json', odir + '/servhi2.json',
+                  odir + '/figure_16.png', duration,
+                  'Correctness of Priority Queueing in Linux')
 
 def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
                  fig_file_name, fct_offset):
