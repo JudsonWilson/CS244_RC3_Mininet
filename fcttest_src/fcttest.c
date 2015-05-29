@@ -1,9 +1,16 @@
 /*
   fcctest
 
-  test the flow completion time
+  Test the flow completion time. Server and client must each be started
+  with the size of the flow specified. The client and server first establish
+  a connection, then the client marks the start time, and sends a flow
+  of the specified size. The server, once receiving the specified number
+  of bytes, sends back a single-byte token. Upon receiving the token,
+  the client marks the end time. The flow completing time reported is
+  the difference between this start and end time.
 
-  can enable RC3 mode if needed
+  Can enable RC3 mode if needed using the -r option, but it must be
+  enabled for both the client and server.
 */
 #include <stdlib.h>
 #include <stdio.h>
@@ -30,6 +37,35 @@ bool rc3_log = false;
 bool rc3_logtime = false;
 
 int length = 0;
+
+void usage()
+{
+  printf(
+    "fcttest - A flow-completion-time measurement tool.\n"
+    "Options:\n"
+    "  -s    Sever mode (either -s or -c must be specified).\n"
+    "\n"
+    "  -c    Client mode (either -s or -c must be specified).\n"
+    "\n"
+    "  -p    Port to listen on (server mode) or connect to (client mode).\n"
+    "\n"
+    "  -a address    Address of server (must be specified in client mode).\n"
+    "\n"
+    "  -g flow_len    Length, in bytes, of flow. Must be specified on\n"
+    "                 both the server and client.\n"
+    "\n"
+    "  -r    Enable RC3 mode. Must be specified for both client and server,\n"
+    "        or neither.\n"
+    "\n"
+    "  -l    Enable RC3 logging mode (kernel socket option).\n"
+    "\n"
+    "  -t    Enable RC3 logging time mode (kernel socket option).\n"
+    "\n"
+    "  -v    Verbose mode. Only recommended for troubleshooting, can\n"
+    "        increase the measured times, due to extra printing.\n"
+  );
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -76,26 +112,32 @@ int main(int argc, char *argv[])
       break;
     case 'v':
       verbose = true;
-      vprintf("Verbose mode on!.\n");
+      vprintf("Verbose mode on!. Timing is now less accurate.\n");
       break;
     default:
-      fprintf(stderr, "Usage: %s (-s|-c)\n", argv[0]);
+      usage();
       exit(EXIT_FAILURE);
     }
   }
 
   if (server && client) {
     fprintf(stderr, "[ERROR] Can't be server AND client.");
+    printf("\n");
+    usage();
     exit(EXIT_FAILURE);
   }
 
   if (!port) {
     fprintf(stderr, "[ERROR] Must set a port.");
+    printf("\n");
+    usage();
     exit(EXIT_FAILURE);
   }
 
   if (!length) {
     fprintf(stderr, "[ERROR] Need length!\n");
+    printf("\n");
+    usage();
     exit(EXIT_FAILURE);
   }
 
@@ -109,6 +151,8 @@ int main(int argc, char *argv[])
   }
 
   fprintf(stderr, "[ERROR] must be client or server.\n");
+  printf("\n");
+  usage();
 }
 
 static void do_server(uint16_t port)
@@ -145,6 +189,10 @@ static void do_server(uint16_t port)
     exit(EXIT_FAILURE);
   }
 
+  // Setup a buffer to receive in.
+  char *buffer = malloc(length);
+
+  // Repeatedly do fct tests as clients request them (one at a time).
   while (1) {
     socklen_t slen = sizeof(client_addr);
     client_fd = accept(serv_fd, (struct sockaddr *)&client_addr, &slen);
@@ -157,7 +205,7 @@ static void do_server(uint16_t port)
 
     set_rc3_options(client_fd);
 
-    char *buffer = malloc(length);
+    // Read data loop.
     int total = 0;
     int got = 0;
     while(total < length) {
@@ -166,19 +214,26 @@ static void do_server(uint16_t port)
         fprintf(stderr, "[ERROR] got a bad amount of bytes %d\n", got);
         exit(EXIT_FAILURE);
       }
-//      printf("Got %d bytes!\n", got);
+      vprintf("Got %d bytes\n", got);
       total += got;
     }
 
-    vprintf("Writing response $\n");
+    vprintf("Writing response token\n");
 
+    // Send the response token, siginalling to the client that I have
+    // received the whole flow.
     char response_token = '$';
     write(client_fd, &response_token, 1);
 
-    buffer[length-1]= '\0';
-    vprintf("Transfered string: \"%s\" \n", buffer);
+    vprintf("Write token.\n");
+
+    // Useful for debugging:
+    // buffer[length-1]= '\0';
+    // vprintf("Transfered string: \"%s\" \n", buffer);
 
     close(client_fd);
+
+    vprintf("Connection closed.\n");
   }
 }
 
@@ -207,7 +262,6 @@ static void do_client(const char *addr, uint16_t port)
   }
 
   char *buff = malloc(length);
-  strcpy(buff, "abcdefslkfjlksjflksjdflkajflkfljasflkjdslkfjalj123");
 
   struct timespec time_start, time_finish;
 
@@ -215,11 +269,12 @@ static void do_client(const char *addr, uint16_t port)
 
   write(fd, buff, length);
 
-//  printf("Sent!\n");
+  vprintf("Sent via write syscall! Waiting for $ token.\n");
 
-//  printf("Waiting for $\n");
   int got;
   got = read(fd, buff, 1);
+
+  vprintf("Got a byte.\n");
 
   clock_gettime(CLOCK_MONOTONIC, &time_finish);
 
@@ -236,13 +291,6 @@ static void do_client(const char *addr, uint16_t port)
 
   double f_msecs = nanodiff / (1000.0 * 1000.0);
 
-
-  //printf("Debug code!\n");
-  //if (f_msecs < 2) {
-  //  printf("start time: %d secs, %ld nsecs\n", (int)time_start.tv_sec, time_start.tv_nsec);
-  //  printf("finish time: %d secs, %ld nsecs\n", (int)time_finish.tv_sec, time_finish.tv_nsec);
-  //}
-
   if (verbose) {
     printf("Time difference: %d secs, %ld nsecs\n", secs, nsecs);
     printf("Time difference: %f msecs\n", f_msecs);
@@ -250,7 +298,6 @@ static void do_client(const char *addr, uint16_t port)
   else {
     printf("%f\n", f_msecs);
   }
-
 }
 
 
