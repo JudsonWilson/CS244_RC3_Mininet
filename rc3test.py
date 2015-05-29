@@ -10,12 +10,37 @@ from mininet.cli import CLI
 from time import time
 from time import sleep
 from signal import SIGINT
+from argparse import ArgumentParser
 import subprocess
 import json
+import os
 import matplotlib.pyplot as plt
 from figure15_helpers import *
 
 
+parser = ArgumentParser(description="CS244 Spring '15, RC3 Test")
+parser.add_argument('--num-flows', '-n',
+                    dest="num_flows",
+                    type=int,
+                    action="store",
+                    help="Number of flows of a each size to measure "
+                         "for each flow completion time test configuration.",
+                    default=10,
+                    required=False)
+
+parser.add_argument('--dir', '-d',
+                    dest="output_dir",
+                    action="store",
+                    help="Directory to store outputs",
+                    default="results",
+                    required=False)
+
+# Expt parameters
+output_dir= './'
+args = parser.parse_args()
+
+if not os.path.exists(args.output_dir):
+    os.makedirs(args.output_dir)
 
 # Below are the settings used to produce Figures 15 (a) and (b)
 # from the paper, with original data and additional Mininet tests.
@@ -29,9 +54,9 @@ RC3_fct_test_configs = [
         'bandwidth': 100, # 100 Mbps
         'delay': '1000ms', # Delay is only at the host.
         'time_scale_factor': 1.0/100.0, # Rate by 1/100, delay by 100
-        'flows_per_test': 10,
+        'flows_per_test': args.num_flows,
         'starter_data_function': figure15a_paper_data,
-        'fig_file_name': 'figure_15a.png',
+        'fig_file_name': args.output_dir + '/figure_15a.png',
         'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
     },
     # Figure 15(b)
@@ -40,9 +65,9 @@ RC3_fct_test_configs = [
         'bandwidth': 100, # 10 Mbps
         'delay': '100ms', # Delay is only at the host.
         'time_scale_factor': 1.0/10.0, # Rate by 1/100, delay by 100
-        'flows_per_test': 10,
+        'flows_per_test': args.num_flows,
         'starter_data_function': figure15b_paper_data,
-        'fig_file_name': 'figure_15b.png',
+        'fig_file_name': args.output_dir + '/figure_15b.png',
         'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
     }
 ]
@@ -199,7 +224,7 @@ def runPrioSwitchFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFir
 def prioSwitchTest(bandwidth, delay, interval, duration):
     runPrioSwitchFlows(bandwidth, delay, interval, duration, 'sservlo1.json', 'sservhi1.json', False)
     runPrioSwitchFlows(bandwidth, delay, interval, duration, 'sservlo2.json', 'sservhi2.json', True)
-    iperfPlotJSON('sservlo1.json', 'sservhi1.json', 'sservlo2.json', 'sservhi2.json', 'figure_17.png', duration, 'Correctness of Priority Queueing in the Switch')
+    iperfPlotJSON('sservlo1.json', 'sservhi1.json', 'sservlo2.json', 'sservhi2.json', args.output_dir + '/figure_17.png', duration, 'Correctness of Priority Queueing in the Switch')
 
 
 '''
@@ -330,7 +355,7 @@ def runPrioFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFirst):
 def prioTest(bandwidth, delay, interval, duration):
     runPrioFlows(bandwidth, delay, interval, duration, 'servlo1.json', 'servhi1.json', False)
     runPrioFlows(bandwidth, delay, interval, duration, 'servlo2.json', 'servhi2.json', True)
-    iperfPlotJSON('servlo1.json', 'servhi1.json', 'servlo2.json', 'servhi2.json', 'figure_16.png', duration, 'Correctness of Priority Queueing in Linux')
+    iperfPlotJSON('servlo1.json', 'servhi1.json', 'servlo2.json', 'servhi2.json', args.output_dir + '/figure_16.png', duration, 'Correctness of Priority Queueing in Linux')
 
 def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
                  fig_file_name, fct_offset):
@@ -373,7 +398,7 @@ def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
 
     plotBarClusers(data, flow_types, flow_type_colors, title, fig_file_name)
 
-def fct_test(net, skip = 3, size = 1024*1024, iterations = 10, use_rc3=False):
+def fct_test(net, skip = 2, size = 1024*1024, iterations = 10, use_rc3=False):
     '''Run the fcttest multiple times, return list of times in milliseconds.
 
     net: Mininet net object.
