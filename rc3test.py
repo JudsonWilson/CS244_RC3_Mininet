@@ -1,4 +1,7 @@
 #!/usr/bin/python
+'''Test script for RC3 flow completion times vs regular completion times.
+
+Also includes tests to show priority queue implementation correctness.'''
 
 from mininet.topo import Topo
 from mininet.net import Mininet
@@ -36,7 +39,6 @@ parser.add_argument('--dir', '-d',
                     required=False)
 
 # Expt parameters
-output_dir= './'
 args = parser.parse_args()
 
 if not os.path.exists(args.output_dir):
@@ -73,6 +75,7 @@ RC3_fct_test_configs = [
 ]
 
 class PrioSwitchTestTopo(Topo):
+    '''Topology for testing priority queues on a switch.'''
     def __init__(self, bandwidth, delay):
 
         #Initialize Topology
@@ -91,7 +94,7 @@ class PrioSwitchTestTopo(Topo):
 
 
 class PrioTestTopo(Topo):
-
+    '''Topology for testing priority queues on a host.'''
     def __init__(self, bandwidth, delay):
 
         #Initialize Topology
@@ -105,7 +108,7 @@ class PrioTestTopo(Topo):
         self.addLink(h1, h2, bw=bandwidth, delay=delay, use_htb=True)
 
 class RC3Topo(Topo):
-
+    '''Topology for testing RC3 flow completion times, including a switch.'''
     def __init__(self, bandwidth):
 
         #Initialize Topology
@@ -120,14 +123,13 @@ class RC3Topo(Topo):
         self.addLink(h1, switch, bw=bandwidth, use_htb=True)
         self.addLink(switch, h2, bw=bandwidth, use_htb=True)
 
-
 def addPrioQdisc(node, devStr, bandwidth, delay=None):
     '''Setup the HTB, prio qdisc, netem, etc.
 
-    node: Network node, e.g. h1, h2, s1
-    devStr: Device name string, e.g. 'h1-eth0'
-    bandwidth: A number, representing amount of Mbps
-    delay: a string, such as 10us, or None for no delay.
+    node: Network node, e.g. h1, h2, s1.
+    devStr: Device name string, e.g. 'h1-eth0'.
+    bandwidth: A number, representing bandwidth in Mbps.
+    delay: A string, such as 10us, or None for no delay.
     '''
 
     print devStr, "Initial tc Configuration ==========================="
@@ -165,6 +167,22 @@ def addPrioQdisc(node, devStr, bandwidth, delay=None):
     #node.cmdPrint('tc -s class ls dev', devStr)
 
 def runPrioSwitchFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFirst):
+    '''Create a mininet simulation, and test priority queues on a switch.
+
+    Starts a high or low priority flow from one host to a receiver, through
+    the switch. At half the duration, the other host starts another flow
+    through the switch to the same receiver, but with the other priority level.
+    Records JSON outputs for later parsing.
+
+    Args:
+        bandwidth: A number, representing bandwidth of each link in Mbps.
+        delay: A string, such as 10us, or None for no delay.
+        interval: Number of seconds between each iperf3 output.
+        duration: Total duration of test, in seconds.
+        loOut: Iperf3 output file name for low priority flow information.
+        hiOut: Iperf3 output file name for high priority flow information.
+        loFirst: Boolean, whether low priority flow starts first or not.
+    '''
     topo = PrioSwitchTestTopo(bandwidth, delay)
     net = Mininet(topo, link=TCLink)
     net.start()
@@ -186,42 +204,56 @@ def runPrioSwitchFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFir
     h2.cmd('killall iperf3')
     h3.cmd('killall iperf3')
 
-    popens = {}
+    ps = {} # ProcesseS
 
     print "Testing bandwidth with high and low priority flows..."
-    popens['hiserv'] = h3.popen('iperf3 -s -p 5001 -1 -i %f -J > %s'% (interval, hiOut), shell=True)
-    popens['loserv'] = h3.popen('iperf3 -s -p 5002 -1 -i %f -J > %s'% (interval, loOut), shell=True)
+    ps['hiserv'] = h3.popen('iperf3 -s -p 5001 -1 -i %f -J > %s' \
+                % (interval, hiOut), shell=True)
+    ps['loserv'] = h3.popen('iperf3 -s -p 5002 -1 -i %f -J > %s' \
+                % (interval, loOut), shell=True)
 
 
     if loFirst:
         print 'launching low priority iperf'
-        popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
-                (h3.IP(), interval, duration+1), shell=True)
+        ps['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' \
+                % (h3.IP(), interval, duration+1), shell=True)
     else:
         print 'launching high priority iperf'
-        popens['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
-                (h3.IP(), interval, duration+1), shell=True)
+        ps['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0 -J' \
+                % (h3.IP(), interval, duration+1), shell=True)
 
     sleep(duration/ 2)
 
     if loFirst:
         print 'launching high priority iperf'
-        popens['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
-                (h3.IP(), interval, (duration/2)+1), shell=True)
+        ps['hiperf'] = h2.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0 -J' \
+                % (h3.IP(), interval, (duration/2)+1), shell=True)
     else:
         print 'launching low priority iperf'
-        popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
-                (h3.IP(), interval, (duration/2)+1), shell=True)
+        ps['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' \
+                % (h3.IP(), interval, (duration/2)+1), shell=True)
 
-    popens['hiperf'].wait()
-    popens['loperf'].wait()
-    popens['hiserv'].wait()
-    popens['loserv'].wait()
+    ps['hiperf'].wait()
+    ps['loperf'].wait()
+    ps['hiserv'].wait()
+    ps['loserv'].wait()
     print 'flows finished'
 
     net.stop()
 
 def prioSwitchTest(bandwidth, delay, interval, duration):
+    '''Test priority queues on a switch topo, producing a pair of graphs.
+
+    Starts a high or low priority flow from one host to a receiver, through
+    the switch. At half the duration, the other host starts another flow
+    through the switch to the same receiver, but with the other priority level.
+
+    Args:
+        bandwidth: A number, representing bandwidth of each link in Mbps.
+        delay: A string, such as 10us, or None for no delay.
+        interval: Number of seconds between each iperf3 output.
+        duration: Total duration of test, in seconds.
+    '''
     odir = args.output_dir
     runPrioSwitchFlows(bandwidth, delay, interval, duration,
                        odir + '/sservlo1.json', odir + '/sservhi1.json', False)
@@ -232,11 +264,15 @@ def prioSwitchTest(bandwidth, delay, interval, duration):
                   odir + '/figure_17.png', duration,
                   'Correctness of Priority Queueing in the Switch')
 
-'''
-parse the JSON output from iperf3 and return two arrays with time offsets and
-reported bandwidths
-'''
 def iperfParseJSON(filename, duration, offset):
+    '''
+    Parse JSON output from iperf3 and return arrays of times and bandwidths.
+
+    Args:
+        filename: Input JSON file name.
+        duration: Number of seconds in the file.
+        offset: Offset to apply to time values, for flows started later.
+    '''
     X = []
     Y = []
     with open(filename) as f:
@@ -249,12 +285,19 @@ def iperfParseJSON(filename, duration, offset):
 
     return (X, Y)
 
-'''
-Plot four json files and output as outfile. lofile1 and hifile1 are the flows
-for the first test (low priority starts after high priority) and lofile2 and 
-hifile2 are for the second test (high priority starts after low priority).
-'''
-def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration, title):
+def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile, duration,
+                  title):
+    '''
+    Plot four json files and output as outfile.
+
+    Args:
+        lofile1, hifile1: Flow files for the first test (low priority starts
+            after high priority).
+        lofile2 hifile2: Flow files for the the second test (high priority
+            starts after low priority).
+        duration: Number of seconds in the test.
+        title: Title to use for the plot.
+    '''
     plt.clf()
     plt.cla()
 
@@ -301,11 +344,24 @@ def iperfPlotJSON(lofile1, hifile1, lofile2, hifile2, outfile,duration, title):
 
 
     plt.savefig(outfile, bbox_inches='tight')
-    print('plot saved to ',outfile)
-
-
+    print('plot saved to ', outfile)
 
 def runPrioFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFirst):
+    '''Create a mininet simulation, and test priority queues on a host.
+
+    Starts a high or low priority flow from one host to a receiver. At half
+    the duration, the other host starts another flow to the same receiver, but
+    with the other priority level. Records JSON outputs for later parsing.
+
+    Args:
+        bandwidth: A number, representing bandwidth of each link in Mbps.
+        delay: A string, such as 10us, or None for no delay.
+        interval: Number of seconds between each iperf3 output.
+        duration: Total duration of test, in seconds.
+        loOut: Iperf3 output file name for low priority flow information.
+        hiOut: Iperf3 output file name for high priority flow information.
+        loFirst: Boolean, whether low priority flow starts first or not.
+    '''
     topo = PrioTestTopo(bandwidth, delay)
     net = Mininet(topo, link=TCLink)
     net.start()
@@ -322,42 +378,55 @@ def runPrioFlows(bandwidth, delay, interval, duration, loOut, hiOut, loFirst):
     h1.cmd('killall iperf3')
     h2.cmd('killall iperf3')
 
-    popens = {}
+    ps = {} # ProcesseS
 
     print "Testing bandwidth with high and low priority flows..."
-    popens['hiserv'] = h2.popen('iperf3 -s -p 5001 -1 -i %f -J > %s'% (interval, hiOut), shell=True)
-    popens['loserv'] = h2.popen('iperf3 -s -p 5002 -1 -i %f -J > %s'% (interval, loOut), shell=True)
-
+    ps['hiserv'] = h2.popen('iperf3 -s -p 5001 -1 -i %f -J > %s' \
+                % (interval, hiOut), shell=True)
+    ps['loserv'] = h2.popen('iperf3 -s -p 5002 -1 -i %f -J > %s' \
+                % (interval, loOut), shell=True)
 
     if loFirst:
         print 'launching low priority iperf'
-        popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
-                (h2.IP(), interval, duration+1), shell=True)
+        ps['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' \
+                % (h2.IP(), interval, duration+1), shell=True)
     else:
         print 'launching high priority iperf'
-        popens['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
-                (h2.IP(), interval, duration+1), shell=True)
+        ps['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0 -J' \
+                % (h2.IP(), interval, duration+1), shell=True)
 
     sleep(duration/ 2)
 
     if loFirst:
         print 'launching high priority iperf'
-        popens['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0  -J ' % 
-                (h2.IP(), interval, (duration/2)+1), shell=True)
+        ps['hiperf'] = h1.popen('iperf3 -c %s -p 5001 -i %f -t %d -S 0x0 -J' \
+                % (h2.IP(), interval, (duration/2)+1), shell=True)
     else:
         print 'launching low priority iperf'
-        popens['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' % 
-                (h2.IP(), interval, (duration/2)+1), shell=True)
+        ps['loperf'] = h1.popen('iperf3 -c %s -p 5002 -i %f -t %d -S 0x4 -J' \
+                % (h2.IP(), interval, (duration/2)+1), shell=True)
 
-    popens['hiperf'].wait()
-    popens['loperf'].wait()
-    popens['hiserv'].wait()
-    popens['loserv'].wait()
+    ps['hiperf'].wait()
+    ps['loperf'].wait()
+    ps['hiserv'].wait()
+    ps['loserv'].wait()
     print 'flows finished'
 
     net.stop()
 
 def prioTest(bandwidth, delay, interval, duration):
+    '''Test priority queues on a host (no switchs), producing a pair of graphs.
+
+    Starts a high or low priority flow from one host to a receiver. At half
+    the duration, the other host starts another flow to the same receiver,
+    but with the other priority level.
+
+    Args:
+        bandwidth: A number, representing bandwidth of each link in Mbps.
+        delay: A string, such as 10us, or None for no delay.
+        interval: Number of seconds between each iperf3 output.
+        duration: Total duration of test, in seconds.
+    '''
     odir = args.output_dir
     runPrioFlows(bandwidth, delay, interval, duration,
                  odir + '/servlo1.json', odir + '/servhi1.json', False)
@@ -372,18 +441,19 @@ def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
                  fig_file_name, fct_offset):
     '''Run a series of flow completion time tests, and make a bar chart.
 
-    net: Mininet net object.
-    iterations: Number of times to test FCT at a given setting, before
-        taking mean and stddev.
-    time_scale_factor: FCTs will be scaled by this amount, to normalize
-        results. I.e. if link delay is scaled by 10, scale_factor should
-        probably be 1/10.
-    starter_data_function: The name of a function which will give a data
-        structure for plotting. This is used to get the data from the paper
-        figures 15(a) and 15(b). See figure15_helpers.py.
-    fig_file_name: If specified, where to save the resulting plot.
-    fct_offset: Offset time (in post-scaling units) to adjust for difference
-        in measuring technique.
+    Args:
+        net: Mininet net object.
+        iterations: Number of times to test FCT at a given setting, before
+            taking mean and stddev.
+        time_scale_factor: FCTs will be scaled by this amount, to normalize
+            results. I.e. if link delay is scaled by 10, scale_factor should
+            probably be 1/10.
+        starter_data_function: The name of a function which will give a data
+            structure for plotting. This is used to get the data from the paper
+            figures 15(a) and 15(b). See figure15_helpers.py.
+        fig_file_name: If specified, where to save the resulting plot.
+        fct_offset: Offset time (in post-scaling units) to adjust for
+            difference in measuring technique.
     '''
 
     # Flow lengths for the flow completion times.
@@ -412,11 +482,12 @@ def do_fct_tests(net, iterations, time_scale_factor, starter_data_function,
 def fct_test(net, skip = 2, size = 1024*1024, iterations = 10, use_rc3=False):
     '''Run the fcttest multiple times, return list of times in milliseconds.
 
-    net: Mininet net object.
-    skip: The number of initial tests to run without including in results.
-    size: Size of the flow, in bytes.
-    iterations: Number of tests to do / results to attempt to return.
-    use_rc3: If True, use RC3 instead of normal TCP. Handled inside fcttest.
+    Args:
+        net: Mininet net object.
+        skip: The number of initial tests to run without including in results.
+        size: Size of the flow, in bytes.
+        iterations: Number of tests to do / results to attempt to return.
+        use_rc3: If True, use RC3 instead of normal TCP.
     '''
 
     results = []
@@ -473,7 +544,8 @@ def setupNetVariables():
 def rc3Test(configs):
     ''' Run a test of flow completion times according to config.
 
-    configs: A dictionary with the following keys:
+    Args:
+      configs: A dictionary with the following keys:
         'bandwidth': The speed of the links in Mbps.
         'delay': The delay to use at each host egress, such as '100ms'
         'time_scale_factor': Amount to scale down flow completion times due
@@ -514,38 +586,13 @@ def rc3Test(configs):
         addPrioQdisc(s1, 's1-eth1', bandwidth=bandwidth) # No delay
         addPrioQdisc(s1, 's1-eth2', bandwidth=bandwidth) # No delay
 
-        #print "Testing bandwidth between 'h1' and 'h2'"
-        #h2.sendCmd('iperf -s')
-        #result = h1.cmd('iperf -c', h2.IP(), '-n', flowLen)
-        #print result
-
-        # TODO These don't seem to help, at 100 or 10000
-
-        #h1.cmdPrint("ifconfig h1-eth0 txqueuelen 100")
-        #h1.cmdPrint("ifconfig lo txqueuelen 100")
-        #h1.cmdPrint("ifconfig")
-        #h2.cmdPrint("ifconfig h2-eth0 txqueuelen 100")
-        #h2.cmdPrint("ifconfig lo txqueuelen 100")
-        #h2.cmdPrint("ifconfig")
-
-        #h1.cmdPrint("ifconfig h1-eth0 txqueuelen 100")
-        #h1.cmdPrint("ifconfig lo txqueuelen 100")
-        #h1.cmdPrint("ifconfig")
-        #h2.cmdPrint("ifconfig h2-eth0 txqueuelen 100")
-        #h2.cmdPrint("ifconfig lo txqueuelen 100")
-        #h2.cmdPrint("ifconfig")
-
-        #CLI(net)
-
         do_fct_tests(net, flows_per_test, time_scale_factor=time_scale_factor,
                      starter_data_function = starter_data_function,
                      fig_file_name = fig_file_name, fct_offset=fct_offset)
-
-        #CLI(net)
-
     net.stop()
 
 if __name__ == '__main__':
+    '''Run prioirty queue correctness tests, and flow completion time tests.'''
     lg.setLogLevel('info')
 
     # Priority Queue Test - With direct host connections.
