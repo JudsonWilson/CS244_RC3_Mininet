@@ -14,6 +14,7 @@ from time import time
 from time import sleep
 from signal import SIGINT
 from argparse import ArgumentParser
+from subprocess import PIPE, Popen
 import subprocess
 import json
 import os
@@ -52,24 +53,50 @@ if not os.path.exists(args.output_dir):
 RC3_fct_test_configs = [
     # Figure 15(a)
     # 10Gbps x 20us RTT test, scaled rate down by 100, delay up by 100
+    # TCP Reno
     {
+        'tcp_type': 'reno',
         'bandwidth': 100, # 100 Mbps
         'delay': '1000ms', # Delay is only at the host.
         'time_scale_factor': 1.0/100.0, # Rate by 1/100, delay by 100
         'flows_per_test': args.num_flows,
         'starter_data_function': figure15a_paper_data,
-        'fig_file_name': args.output_dir + '/figure_15a.png',
+        'fig_file_name': args.output_dir + '/figure_15a_reno.png',
+        'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
+    },
+    # TCP Cubic
+    {
+        'tcp_type': 'cubic',
+        'bandwidth': 100, # 100 Mbps
+        'delay': '1000ms', # Delay is only at the host.
+        'time_scale_factor': 1.0/100.0, # Rate by 1/100, delay by 100
+        'flows_per_test': args.num_flows,
+        'starter_data_function': figure15a_paper_data,
+        'fig_file_name': args.output_dir + '/figure_15a_cubic.png',
         'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
     },
     # Figure 15(b)
     # 1Gbps x 20us RTT test, scaled rate down by 10, delay up by 10
+    # TCP Reno
     {
+        'tcp_type': 'reno',
         'bandwidth': 100, # 10 Mbps
         'delay': '100ms', # Delay is only at the host.
         'time_scale_factor': 1.0/10.0, # Rate by 1/100, delay by 100
         'flows_per_test': args.num_flows,
         'starter_data_function': figure15b_paper_data,
-        'fig_file_name': args.output_dir + '/figure_15b.png',
+        'fig_file_name': args.output_dir + '/figure_15b_reno.png',
+        'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
+    },
+    # TCP Cubic
+    {
+        'tcp_type': 'cubic',
+        'bandwidth': 100, # 10 Mbps
+        'delay': '100ms', # Delay is only at the host.
+        'time_scale_factor': 1.0/10.0, # Rate by 1/100, delay by 100
+        'flows_per_test': args.num_flows,
+        'starter_data_function': figure15b_paper_data,
+        'fig_file_name': args.output_dir + '/figure_15b_cubic.png',
         'fct_offset': 0.010 # 1/2 RTT adjustment to match with paper method.
     }
 ]
@@ -539,13 +566,14 @@ def setupNetVariables():
                 'net.core.rmem_max=2048000000',
                 "net.ipv4.tcp_rmem='10240 2048000000 2048000000'"];
     for setting in settings:
-        subprocess.call("sysctl %s" % (setting,), shell=True)
+        subprocess.call("sysctl -w %s" % (setting,), shell=True)
 
 def rc3Test(configs):
     ''' Run a test of flow completion times according to config.
 
     Args:
       configs: A dictionary with the following keys:
+        'tcp_type': The tcp algorithm to use, i.e. 'reno' or 'cubic'.
         'bandwidth': The speed of the links in Mbps.
         'delay': The delay to use at each host egress, such as '100ms'
         'time_scale_factor': Amount to scale down flow completion times due
@@ -572,6 +600,7 @@ def rc3Test(configs):
 
     # Do test under each configuration.
     for config in configs:
+        tcp_type = config['tcp_type']
         bandwidth = config['bandwidth']
         delay = config['delay']
         time_scale_factor = config['time_scale_factor']
@@ -579,6 +608,19 @@ def rc3Test(configs):
         starter_data_function = config['starter_data_function']
         fig_file_name = config['fig_file_name']
         fct_offset = config['fct_offset']
+
+        # Set congestion control default
+        print "Setting tcp congestion control algorithm to", tcp_type
+        p = Popen("sysctl -w net.ipv4.tcp_congestion_control=%s" \
+                  % (tcp_type,), stdout=PIPE, shell=True)
+        out, err = p.communicate()
+        if (err):
+            print "Error:"
+            print err
+            net.stop()
+            exit(1)
+        else:
+            print out
 
         print "Configuring qdiscs"
         addPrioQdisc(h1, 'h1-eth0', bandwidth=bandwidth, delay=delay)
