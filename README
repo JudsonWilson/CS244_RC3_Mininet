@@ -1,0 +1,38 @@
+This is a series of tests written by Sam Crognale and Judson Wilson to test
+results from the paper Mittal et. al. (2014) "Recursively Cautious Congestion
+Control."
+
+To setup and run the experiment:
+
+1. Launch an Amazon EC2 instance, using the public AMI named
+   CS244-Spr15-RC3-Mininet-Experiement-v#, where # is a version number. You
+   will need to configure your security group to open inbound traffic on the
+   standard ssh port 22, and may wish to also open port 8000 to view results
+   files using a web server interface.
+
+2. SSH into the instance using the public DNS URL and the username "ubuntu".
+
+3. Run either the "short" test or the "full" test, by running either
+   ./run_short.sh or ./run_full.sh. The difference is the number of iterations
+   each FCT test is run for each protocol and flow size. "Short" is
+   recommended, performing 3 flows per test, whereas "full" performs 10
+   tests which takes considerably longer.
+
+4. Once mininet shuts down and display the "Done" message, the results are
+   ready in a subdirectory called "results-short-<timestamp>" or
+   "results-full-<timestamp>".
+
+5. You can view the plot files, with names of format "figure-##.png", in many
+   ways, including:
+     * Starting the python web server using "python -m SimpleHTTPServer &". You
+       can now browse the contents of the folder via web address
+       "http://serverip:8000", where serverip is the ip address of your EC2
+       instance. This requires having port 8000 open for inbound traffic on
+       your EC2 Security Group.
+     * Calling "feh image-##.png", where "image-##.png" is the name of the
+       image file. This uses the feh image viewer to open the image. It
+       requires that you are connected with a terminal that supports X11
+       forwarding and that your ssh connection has trusted X11 forwarding
+       enabled (ssh -Y).
+     * File transfer methods, such as SCP, to transfer the file to your local
+       machine.
